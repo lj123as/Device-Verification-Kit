@@ -1,0 +1,2 @@
+# DVK ProtocolEncodeSkill dependencies
+PyYAML>=6.0

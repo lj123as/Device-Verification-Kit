@@ -1,0 +1,21 @@
+{
+  "name": "dvk",
+  "version": "0.1.0",
+  "description": "Device Verification Kit (DVK): schema-driven protocol → data → analysis → report workflow for embedded device verification",
+  "namespace": "dvk",
+  "skills": [
+    { "name": "using_dvk", "path": "../skills/using_dvk/SKILL.md" },
+    { "name": "protocol_spec_skill", "path": "../skills/protocol_spec_skill/SKILL.md" },
+    { "name": "transport_session_skill", "path": "../skills/transport_session_skill/SKILL.md" },
+    { "name": "protocol_decode_skill", "path": "../skills/protocol_decode_skill/SKILL.md" },
+    { "name": "protocol_encode_skill", "path": "../skills/protocol_encode_skill/SKILL.md" },
+    { "name": "analysis_skill", "path": "../skills/analysis_skill/SKILL.md" },
+    { "name": "protocol_detection_skill", "path": "../skills/protocol_detection_skill/SKILL.md" },
+    { "name": "eda_skill", "path": "../skills/eda_skill/SKILL.md" },
+    { "name": "data_cleaning_skill", "path": "../skills/data_cleaning_skill/SKILL.md" },
+    { "name": "metrics_skill", "path": "../skills/metrics_skill/SKILL.md" },
+    { "name": "anomaly_detection_skill", "path": "../skills/anomaly_detection_skill/SKILL.md" },
+    { "name": "visualization_skill", "path": "../skills/visualization_skill/SKILL.md" },
+    { "name": "report_skill", "path": "../skills/report_skill/SKILL.md" }
+  ]
+}

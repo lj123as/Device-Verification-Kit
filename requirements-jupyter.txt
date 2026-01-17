@@ -1,0 +1,5 @@
+# Notebook UI + interactive plotting
+jupyterlab>=4.0
+jupyter>=1.0
+plotly>=5.0
+

@@ -1,0 +1,26 @@
+# example_device_protocol commands.yaml
+#
+# Business commands (human-maintained): used by ProtocolEncodeSkill / debugging / automation.
+
+command_set_id: example_device_protocol_cmds
+version: 0.1.0
+
+commands:
+  - name: ping
+    id: 0x01
+    description: "Connectivity test / heartbeat"
+    payload:
+      - name: seq
+        type: uint8
+        description: "Sequence number (echoed back)"
+
+  - name: set_mode
+    id: 0x10
+    description: "Set operating mode"
+    payload:
+      - name: mode
+        type: uint8
+        description: "Mode enum: 0=idle, 1=run"
+        enum:
+          0: idle
+          1: run

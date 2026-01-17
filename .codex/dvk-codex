@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# DVK Codex Bootstrap Script
+
+set -e
+
+DVK_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+bootstrap() {
+    echo "=========================================="
+    echo "DVK (Device Verification Kit) for Codex"
+    echo "=========================================="
+    echo ""
+    echo "DVK provides schema-driven device verification:"
+    echo "  Protocol → Capture → Decode → Analysis → Report"
+    echo ""
+    echo "Available Skills (prefix with 'dvk:'):"
+    echo "  - using_dvk               Workflow orchestration"
+    echo "  - protocol_spec_skill     Protocol onboarding"
+    echo "  - transport_session_skill Data capture (UART/TCP/UDP)"
+    echo "  - protocol_decode_skill   Frame decoding"
+    echo "  - protocol_encode_skill   Command encoding"
+    echo "  - protocol_detection_skill Auto-detect protocols"
+    echo "  - analysis_skill          Jupyter analysis"
+    echo "  - eda_skill              Exploratory analysis"
+    echo "  - data_cleaning_skill    Data quality"
+    echo "  - metrics_skill          KPI computation"
+    echo "  - anomaly_detection_skill Outlier detection"
+    echo "  - visualization_skill    Chart generation"
+    echo "  - report_skill           Report generation"
+    echo ""
+    echo "=========================================="
+    echo "Python Environment Check"
+    echo "=========================================="
+
+    if command -v python3 &> /dev/null; then
+        PYTHON_VERSION=$(python3 --version)
+        echo "✓ Python found: $PYTHON_VERSION"
+    else
+        echo "✗ Python 3.9+ required but not found"
+        exit 1
+    fi
+
+    if [ -d "$DVK_ROOT/.venv" ]; then
+        echo "✓ Virtual environment exists at $DVK_ROOT/.venv"
+    else
+        echo "⚠ Virtual environment not found"
+        echo "  Run: cd $DVK_ROOT && python3 -m venv .venv"
+    fi
+
+    echo ""
+    echo "=========================================="
+    echo "Next Steps"
+    echo "=========================================="
+    echo ""
+    echo "1. Activate virtual environment:"
+    echo "   cd $DVK_ROOT"
+    echo "   source .venv/bin/activate"
+    echo ""
+    echo "2. Install dependencies:"
+    echo "   pip install -r skills/transport_session_skill/requirements.txt"
+    echo "   pip install -r skills/protocol_decode_skill/requirements.txt"
+    echo "   pip install -r skills/analysis_skill/requirements.txt"
+    echo ""
+    echo "3. Verify installation:"
+    echo "   python skills/analysis_skill/scripts/dvk_analysis.py check-env"
+    echo ""
+    echo "4. Use DVK skills in Codex with 'dvk:' prefix:"
+    echo "   dvk:using_dvk"
+    echo "   dvk:protocol_decode_skill"
+    echo ""
+    echo "Documentation: $DVK_ROOT/README.md"
+    echo "=========================================="
+}
+
+case "${1:-bootstrap}" in
+    bootstrap)
+        bootstrap
+        ;;
+    *)
+        echo "Usage: dvk-codex bootstrap"
+        exit 1
+        ;;
+esac

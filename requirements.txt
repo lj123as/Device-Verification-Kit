@@ -1,0 +1,8 @@
+# Aggregated dependencies (single venv).
+# Keep skill-local requirements in skills/*/requirements.txt; this file composes them.
+
+-r requirements-core.txt
+-r requirements-analysis.txt
+-r requirements-jupyter.txt
+-r requirements-parquet.txt
+

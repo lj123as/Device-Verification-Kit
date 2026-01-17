@@ -1,0 +1,4 @@
+# DVK ReportSkill dependencies
+# Core: no external deps (stdlib only for Markdown/HTML)
+# Optional: for PDF export (future)
+# weasyprint>=60.0

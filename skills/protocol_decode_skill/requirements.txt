@@ -1,0 +1,5 @@
+# DVK ProtocolDecodeSkill dependencies
+# Core: no external deps (stdlib only for CSV/JSON)
+# Optional: for Parquet output
+pandas>=2.0.0
+pyarrow>=12.0.0

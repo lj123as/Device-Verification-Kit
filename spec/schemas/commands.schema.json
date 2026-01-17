@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "dvk://spec/schemas/commands.schema.json",
+  "title": "DVK commands.yaml schema (JSON-schema for YAML)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["commands"],
+  "properties": {
+    "command_set_id": { "type": "string", "minLength": 1 },
+    "device": { "type": "string", "minLength": 1, "description": "Deprecated: use command_set_id" },
+    "version": { "type": ["string", "number"] },
+    "telemetry": { "$ref": "#/$defs/telemetry" },
+    "commands": {
+      "type": "array",
+      "minItems": 0,
+      "items": { "$ref": "#/$defs/command" }
+    }
+  },
+  "$defs": {
+    "idValue": {
+      "anyOf": [
+        { "type": "integer", "minimum": 0 },
+        { "type": "string", "pattern": "^0x[0-9A-Fa-f]+$" }
+      ]
+    },
+    "scalarType": {
+      "type": "string",
+      "enum": [
+        "uint8",
+        "int8",
+        "uint16_le",
+        "uint16_be",
+        "int16_le",
+        "int16_be",
+        "uint32_le",
+        "uint32_be",
+        "int32_le",
+        "int32_be",
+        "float32_le",
+        "float32_be",
+        "bytes"
+      ]
+    },
+    "payloadField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "type": { "$ref": "#/$defs/scalarType" },
+        "description": { "type": "string" },
+        "unit": { "type": "string" },
+        "default": {},
+        "range": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min": { "type": "number" },
+            "max": { "type": "number" }
+          }
+        },
+        "enum": {
+          "type": "object",
+          "additionalProperties": { "type": ["string", "number", "boolean"] }
+        }
+      }
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "id"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "id": { "$ref": "#/$defs/idValue" },
+        "description": { "type": "string" },
+        "payload": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/payloadField" }
+        }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "transforms": {
+          "type": "array",
+          "minItems": 0,
+          "items": { "$ref": "#/$defs/telemetryTransform" }
+        }
+      }
+    },
+    "telemetryTransform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "enum": ["triplet_pointcloud_v1", "if_dn_pointcloud_v1"] },
+        "frame_name": { "type": "string" },
+        "input_field": { "type": "string" },
+        "count_ref": { "type": "string" },
+        "include_frame_fields": { "type": "array", "items": { "type": "string" } },
+        "brightness_mode": { "type": "string", "enum": ["none", "u8", "u16_le"] },
+        "angle": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "start_field": { "type": "string" },
+            "end_field": { "type": "string" },
+            "subtract_a000": { "type": "boolean" },
+            "right_shift": { "type": "integer", "minimum": 0 },
+            "scale_div": { "type": "number", "exclusiveMinimum": 0 },
+            "offset": { "type": "number" }
+          }
+        },
+        "speed": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "field": { "type": "string" },
+            "div": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        },
+        "distance": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mask": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "intensity": { "type": "object", "additionalProperties": false, "properties": {} },
+        "hr_flag": { "type": "object", "additionalProperties": false, "properties": {} }
+      }
+    }
+  }
+}

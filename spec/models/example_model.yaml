@@ -1,0 +1,22 @@
+model_id: example_model
+display_name: "Example Device Model"
+description: "Example model to demonstrate model↔bundle mapping."
+
+# Optional: default transport hints for interactive setup.
+default_transports:
+  - type: UART
+    baudrate: 115200
+
+# A usable protocol for a model is a {protocol.json + commands.yaml} bundle.
+# Bundle IDs are NOT hard-bound to the model; the model merely references them.
+protocol_bundles:
+  - bundle_id: example_bundle_01
+    status: stable
+    protocol_id: example_device_protocol
+    command_set_id: example_device_protocol_cmds
+    expected_protocol_version: "0.1.0"
+    expected_command_set_version: "0.1.0"
+    notes: "Example binding: one usable protocol = FrameSpec + CommandSet."
+
+notes:
+  - "A real model file should include HW revision ranges, FW constraints, and any special connection notes."

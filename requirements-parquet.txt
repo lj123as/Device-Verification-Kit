@@ -1,0 +1,3 @@
+# Optional: Parquet IO
+pyarrow>=12.0.0
+

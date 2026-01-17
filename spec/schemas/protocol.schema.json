@@ -1,0 +1,244 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "dvk://spec/schemas/protocol.schema.json",
+  "title": "DVK protocol.json schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol_name", "frames"],
+  "properties": {
+    "protocol_id": { "type": "string", "minLength": 1 },
+    "protocol_version": { "type": "string", "minLength": 1 },
+    "protocol_name": { "type": "string", "minLength": 1 },
+    "frame_selector": { "$ref": "#/$defs/frameSelector" },
+    "frames": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/frame" }
+    }
+  },
+  "$defs": {
+    "hexByte": { "type": "string", "pattern": "^0x[0-9A-Fa-f]{2}$" },
+    "scalarType": {
+      "type": "string",
+      "enum": [
+        "uint8",
+        "int8",
+        "uint16_le",
+        "uint16_be",
+        "int16_le",
+        "int16_be",
+        "uint32_le",
+        "uint32_be",
+        "int32_le",
+        "int32_be",
+        "float32_le",
+        "float32_be",
+        "bytes"
+      ]
+    },
+    "lengthRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref"],
+      "properties": {
+        "ref": { "type": "string", "minLength": 1 },
+        "mul": { "type": "integer" },
+        "add": { "type": "integer" }
+      }
+    },
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "offset", "length", "type"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "offset": { "type": "integer" },
+        "length": {
+          "anyOf": [
+            { "type": "integer", "minimum": 0 },
+            { "$ref": "#/$defs/lengthRef" }
+          ]
+        },
+        "type": { "$ref": "#/$defs/scalarType" },
+        "unit": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    },
+    "lengthSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": { "type": "string", "enum": ["fixed", "dynamic", "counted"] },
+        "value": { "type": "integer", "minimum": 1 },
+        "field": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["offset", "length", "type"],
+          "properties": {
+            "offset": { "type": "integer", "minimum": 0 },
+            "length": { "type": "integer", "minimum": 1 },
+            "type": { "$ref": "#/$defs/scalarType" }
+          }
+        },
+        "count_field": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["offset", "length", "type"],
+          "properties": {
+            "offset": { "type": "integer", "minimum": 0 },
+            "length": { "type": "integer", "minimum": 1 },
+            "type": { "$ref": "#/$defs/scalarType" }
+          }
+        },
+        "unit_bytes": { "type": "integer", "minimum": 1 },
+        "overhead_bytes": { "type": "integer", "minimum": 0 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "mode": { "const": "fixed" } } },
+          "then": { "required": ["value"] }
+        },
+        {
+          "if": { "properties": { "mode": { "const": "dynamic" } } },
+          "then": { "required": ["field", "overhead_bytes"] }
+        },
+        {
+          "if": { "properties": { "mode": { "const": "counted" } } },
+          "then": { "required": ["count_field", "unit_bytes", "overhead_bytes"] }
+        }
+      ]
+    },
+    "checksum": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "range", "store_at"],
+      "properties": {
+        "type": { "type": "string", "enum": ["sum8", "crc16", "crc32", "cs15", "xor16_slices"] },
+        "range": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["from", "to"],
+          "properties": {
+            "from": { "type": "integer" },
+            "to": { "type": "integer" }
+          }
+        },
+        "store_at": { "type": "integer" },
+        "store_format": {
+          "type": "string",
+          "enum": ["uint8", "uint16_le", "uint16_be", "uint32_le", "uint32_be"]
+        },
+        "params": { "$ref": "#/$defs/checksumParams" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "sum8" } } },
+          "then": { "properties": { "store_format": { "const": "uint8" } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "cs15" } } },
+          "then": { "properties": { "store_format": { "const": "uint16_le" } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "xor16_slices" } } },
+          "then": { "properties": { "store_format": { "const": "uint16_le" } }, "required": ["params"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "crc16" } } },
+          "then": { "required": ["store_format", "params"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "crc32" } } },
+          "then": { "required": ["store_format", "params"] }
+        }
+      ]
+    },
+    "checksumParams": {
+      "oneOf": [
+        { "$ref": "#/$defs/crcParams" },
+        { "$ref": "#/$defs/xor16SlicesParams" }
+      ]
+    },
+    "crcParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["poly", "init", "xorout", "refin", "refout"],
+      "properties": {
+        "poly": { "type": "integer", "minimum": 0 },
+        "init": { "type": "integer", "minimum": 0 },
+        "xorout": { "type": "integer", "minimum": 0 },
+        "refin": { "type": "boolean" },
+        "refout": { "type": "boolean" }
+      }
+    },
+    "xor16SlicesParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seed_low_offsets", "seed_up_offsets", "data_slices"],
+      "properties": {
+        "seed_low_offsets": { "type": "array", "items": { "type": "integer" }, "minItems": 1 },
+        "seed_up_offsets": { "type": "array", "items": { "type": "integer" }, "minItems": 1 },
+        "data_slices": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["from", "to", "stride", "low_rel_offsets", "up_rel_offsets"],
+            "properties": {
+              "from": { "type": "integer" },
+              "to": { "type": "integer" },
+              "stride": { "type": "integer", "minimum": 1 },
+              "low_rel_offsets": { "type": "array", "items": { "type": "integer" }, "minItems": 1 },
+              "up_rel_offsets": { "type": "array", "items": { "type": "integer" }, "minItems": 1 }
+            }
+          }
+        }
+      }
+    },
+    "frame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "header", "length", "fields"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "header": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/hexByte" }
+        },
+        "length": { "$ref": "#/$defs/lengthSpec" },
+        "fields": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/field" } },
+        "checksum": { "$ref": "#/$defs/checksum" }
+      }
+    },
+    "frameSelector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "enum": ["if_bits_v1"] },
+        "if_offset": { "type": "integer", "minimum": 0, "default": 2 },
+        "brightness_bit": { "type": "integer", "minimum": 0, "maximum": 7 },
+        "invert_brightness_bit": { "type": "boolean", "default": false },
+        "speed_bit": { "type": "integer", "minimum": 0, "maximum": 7 },
+        "invert_speed_bit": { "type": "boolean", "default": false },
+        "brightness_len_bit": { "type": "integer", "minimum": 0, "maximum": 7 },
+        "invert_brightness_len_bit": { "type": "boolean", "default": false },
+        "frames": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "no_speed_dist_only": { "type": "string", "minLength": 1 },
+            "speed_dist_only": { "type": "string", "minLength": 1 },
+            "no_speed_dist_brightness_u8": { "type": "string", "minLength": 1 },
+            "speed_dist_brightness_u8": { "type": "string", "minLength": 1 },
+            "no_speed_dist_brightness_u16": { "type": "string", "minLength": 1 },
+            "speed_dist_brightness_u16": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    }
+  }
+}

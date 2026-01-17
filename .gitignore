@@ -1,0 +1,148 @@
+# DVK (Device Verification Kit) .gitignore
+
+# ========================================
+# Architecture & Development Documentation
+# ========================================
+# Exclude internal development artifacts
+docs/
+*_Architecture.md
+task_plan.md
+findings.md
+progress.md
+DEV_*.md
+ARCH.md
+**/docs/ARCH.md
+
+# ========================================
+# Data & Runtime Artifacts
+# ========================================
+# Exclude captured data, analysis outputs, and run records
+data/
+reports/
+runs/
+*.bin
+*.parquet
+*.csv
+*.json.bak
+
+# Temporary working directories
+data/tmp/
+.spec-workflow/
+
+# ========================================
+# Python
+# ========================================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.virtualenv/
+
+# Testing
+.pytest_cache/
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+*.cover
+.hypothesis/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ========================================
+# IDE & Editors
+# ========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# ========================================
+# OS Files
+# ========================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ========================================
+# Logs & Temporary Files
+# ========================================
+*.log
+*.tmp
+*.temp
+*.pid
+*.seed
+*.log.*
+logs
+
+# ========================================
+# Git & Version Control
+# ========================================
+*.orig
+*.rej
+.git-rewrite/
+
+# ========================================
+# DVK-Specific
+# ========================================
+# Claude plugin cache (keep plugin.json for repo identification)
+.claude-plugin/cache/
+.claude-plugin/.cache
+
+# Analysis workspace (Jupyter notebooks are regenerated)
+**/analysis/notebooks/*.ipynb
+
+# Protocol detection evidence (temporary)
+**/detection/evidence/
+
+# Session metadata (runtime only)
+session.json
+
+# Spec directory - ignore non-example content (keep schemas/ and detection/)
+spec/protocols/*
+!spec/protocols/example*/
+
+spec/command_sets/*
+!spec/command_sets/example*/
+
+spec/models/*
+!spec/models/example*.yaml

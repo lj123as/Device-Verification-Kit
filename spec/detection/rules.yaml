@@ -1,0 +1,34 @@
+# Protocol detection rules (A/B/C mixed; C is default preference)
+#
+# - Method A (query): actively request device info (model/fw/protocol ids)
+# - Method B (banner): parse startup text/banner
+# - Method C (sniff): passive framing-based identification (header/msg_id/length/checksum)
+#
+# Rules are evaluated by ascending priority. Highest confidence wins.
+
+rules:
+  - id: banner_example
+    priority: 50
+    method: banner
+    description: "Example banner regex rule"
+    inputs:
+      transport: UART
+      read_window_ms: 1500
+    match:
+      regex: "^MODEL: (?P<model_id>\\S+) FW: (?P<fw_ver>\\S+)"
+    outputs:
+      model_id: "$model_id"
+    confidence: 0.6
+
+  - id: query_example
+    priority: 10
+    method: query
+    description: "Example active query rule (optional). Use only if device supports a stable info command."
+    inputs:
+      transport: UART
+    query:
+      tx_hex: ["0x01", "0x02"]          # placeholder
+      rx_regex: "PROTOCOL=(?P<protocol_id>\\S+) VER=(?P<protocol_version>\\S+)"
+      timeout_ms: 800
+    outputs: {}
+    confidence: 0.9
