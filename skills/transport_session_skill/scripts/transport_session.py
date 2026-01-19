@@ -40,6 +40,17 @@ from dvk.checksums import verify_checksum  # noqa: E402
 from dvk.workdir import default_workdir_root, run_paths  # noqa: E402
 
 
+def load_yaml_optional(path: Path) -> Optional[dict]:
+    try:
+        import yaml  # type: ignore
+    except Exception:
+        return None
+    try:
+        return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except FileNotFoundError:
+        return None
+
+
 def load_protocol(protocol_path: Path) -> dict:
     try:
         return json.loads(protocol_path.read_text(encoding="utf-8"))
@@ -217,11 +228,37 @@ def cmd_align(args: argparse.Namespace) -> None:
     workdir_root = Path(args.workdir).expanduser() if args.workdir else default_workdir_root()
     run = run_paths(device_id, run_id=args.run_id, workdir_root=workdir_root)
 
-    if not args.protocol:
-        raise SystemExit("Missing --protocol (expected: spec/protocols/<protocol_id>/protocol.json)")
-    protocol_path = Path(args.protocol)
-    if not protocol_path.is_absolute():
-        protocol_path = dvk_root / protocol_path
+    sys.path.insert(0, str(dvk_root))
+    from dvk.assets import resolve_model, resolve_protocol  # type: ignore
+
+    model_id = args.model_id
+    bundle_id = args.bundle_id
+
+    protocol_ref = args.protocol
+    if not protocol_ref and model_id:
+        model_path = resolve_model(model_id)
+        model_doc = load_yaml_optional(model_path)
+        if model_doc is None:
+            raise SystemExit("pyyaml not installed (required for --model-id). Install with: pip install pyyaml")
+        bundles = (model_doc or {}).get("protocol_bundles", [])
+        if isinstance(bundles, list) and bundles:
+            chosen = None
+            if bundle_id:
+                chosen = next((b for b in bundles if isinstance(b, dict) and b.get("bundle_id") == bundle_id), None)
+            if chosen is None:
+                chosen = next((b for b in bundles if isinstance(b, dict)), None)
+            if isinstance(chosen, dict) and isinstance(chosen.get("protocol_id"), str):
+                protocol_ref = chosen["protocol_id"]
+                bundle_id = bundle_id or str(chosen.get("bundle_id") or "")
+
+    if not protocol_ref:
+        raise SystemExit("Missing --protocol (or supply --model-id to auto-select protocol bundle)")
+
+    if ("/" in protocol_ref or "\\" in protocol_ref) and not Path(protocol_ref).is_absolute():
+        protocol_path = (dvk_root / protocol_ref).resolve()
+    else:
+        protocol_path = resolve_protocol(str(protocol_ref))
+
     protocol = load_protocol(protocol_path)
 
     frames = protocol.get("frames", [])
@@ -289,6 +326,8 @@ def cmd_align(args: argparse.Namespace) -> None:
         "device_id": device_id,
         "run_id": run.run_id,
         "workdir": str(workdir_root),
+        "model_id": model_id,
+        "bundle_id": bundle_id or None,
         "protocol": str(protocol_path),
         "frame": frame_spec.get("name"),
         "input": str(out_stream_path),
@@ -314,7 +353,7 @@ def cmd_align(args: argparse.Namespace) -> None:
         if mem:
             mem.observe(
                 run_id=run.run_id,
-                model_id=os.environ.get("DVK_MODEL_ID", device_id),
+                model_id=os.environ.get("DVK_MODEL_ID", (model_id or device_id)),
                 fw_version=os.environ.get("DVK_FW_VERSION", "unknown"),
                 instance_id=device_id,
                 source="system",
@@ -322,6 +361,7 @@ def cmd_align(args: argparse.Namespace) -> None:
             )
     except Exception as e:
         print(f"[embedded-memory] observe failed: {e}", file=sys.stderr)
+
 
 def cmd_capture_uart(args: argparse.Namespace) -> None:
     try:
@@ -337,7 +377,27 @@ def cmd_capture_uart(args: argparse.Namespace) -> None:
     out_stream_path = raw_dir / "stream.bin"
 
     port = args.port
-    baudrate = args.baudrate
+    baudrate: int
+    if args.baudrate is not None:
+        baudrate = int(args.baudrate)
+    elif args.model_id:
+        sys.path.insert(0, str(dvk_root))
+        from dvk.assets import resolve_model  # type: ignore
+
+        model_path = resolve_model(args.model_id)
+        model_doc = load_yaml_optional(model_path)
+        if model_doc is None:
+            raise SystemExit("pyyaml not installed (required for --model-id). Install with: pip install pyyaml")
+        transports = (model_doc or {}).get("default_transports", [])
+        uart = None
+        if isinstance(transports, list):
+            uart = next((t for t in transports if isinstance(t, dict) and str(t.get("type")).upper() == "UART"), None)
+        if isinstance(uart, dict) and uart.get("baudrate"):
+            baudrate = int(uart["baudrate"])
+        else:
+            baudrate = 115200
+    else:
+        baudrate = 115200
     duration_s = args.duration_s
 
     print(f"Capturing UART {port} @ {baudrate} for {duration_s}s -> {out_stream_path}")
@@ -359,7 +419,7 @@ def cmd_capture_uart(args: argparse.Namespace) -> None:
         if mem:
             mem.observe(
                 run_id=run.run_id,
-                model_id=os.environ.get("DVK_MODEL_ID", args.device_id),
+                model_id=os.environ.get("DVK_MODEL_ID", (args.model_id or args.device_id)),
                 fw_version=os.environ.get("DVK_FW_VERSION", "unknown"),
                 instance_id=args.device_id,
                 source="system",
@@ -446,7 +506,7 @@ def cmd_capture_tcp(args: argparse.Namespace) -> None:
         if mem:
             mem.observe(
                 run_id=run.run_id,
-                model_id=os.environ.get("DVK_MODEL_ID", args.device_id),
+                model_id=os.environ.get("DVK_MODEL_ID", (args.model_id or args.device_id)),
                 fw_version=os.environ.get("DVK_FW_VERSION", "unknown"),
                 instance_id=args.device_id,
                 source="system",
@@ -530,7 +590,7 @@ def cmd_capture_udp(args: argparse.Namespace) -> None:
         if mem:
             mem.observe(
                 run_id=run.run_id,
-                model_id=os.environ.get("DVK_MODEL_ID", args.device_id),
+                model_id=os.environ.get("DVK_MODEL_ID", (args.model_id or args.device_id)),
                 fw_version=os.environ.get("DVK_FW_VERSION", "unknown"),
                 instance_id=args.device_id,
                 source="system",
@@ -562,13 +622,15 @@ def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--workdir", help="Output workdir root (default: %USERPROFILE%/DVK_Workspaces)")
     common.add_argument("--run-id", help="Run id (default: auto timestamp)")
+    common.add_argument("--model-id", help="Model id (resolves via $DVK_SPEC_ROOT or default workdir _assets/spec/models)")
+    common.add_argument("--bundle-id", help="Protocol bundle id (from model spec) to select protocol/command defaults")
 
     sub = p.add_subparsers(dest="cmd", required=True)
 
     align = sub.add_parser("align", help="Offline: align stream -> frames using protocol.json", parents=[common])
     align.add_argument("--device-id", required=True)
     align.add_argument("--input", required=True, help="Path to raw byte stream (bin)")
-    align.add_argument("--protocol", required=True, help="Path to protocol.json (e.g., spec/protocols/<protocol_id>/protocol.json)")
+    align.add_argument("--protocol", help="Protocol id or path to protocol.json (optional if --model-id provided)")
     align.add_argument("--frame-name", help="Frame name to use (default: first frame)")
     align.add_argument("--auto-frame-by-if", action="store_true", help="Auto-select frame by IF bits (requires protocol.frame_selector)")
     align.add_argument("--no-checksum", action="store_true", help="Disable checksum enforcement")
@@ -577,7 +639,7 @@ def build_parser() -> argparse.ArgumentParser:
     cap = sub.add_parser("capture-uart", help="Capture UART byte stream to stream.bin (requires pyserial)", parents=[common])
     cap.add_argument("--device-id", required=True)
     cap.add_argument("--port", required=True, help="COMx")
-    cap.add_argument("--baudrate", type=int, default=115200)
+    cap.add_argument("--baudrate", type=int, help="UART baudrate (default: from --model-id spec, else 115200)")
     cap.add_argument("--duration-s", type=int, default=10)
     cap.set_defaults(func=cmd_capture_uart)
 

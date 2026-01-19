@@ -1,4 +1,5 @@
 # Core runtime deps (capture/decode/shared-memory)
 pyserial>=3.5
 numpy>=1.24
+pyyaml>=6.0
 

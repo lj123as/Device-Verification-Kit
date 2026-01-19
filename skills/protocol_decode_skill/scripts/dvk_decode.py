@@ -277,11 +277,40 @@ def cmd_decode(args: argparse.Namespace) -> None:
     workdir_root = Path(args.workdir).expanduser() if args.workdir else default_workdir_root()
 
     # Resolve protocol path
-    if not args.protocol:
-        raise SystemExit("Missing --protocol (expected: spec/protocols/<protocol_id>/protocol.json)")
-    from dvk.assets import resolve_protocol  # type: ignore
+    from dvk.assets import resolve_command_set, resolve_model, resolve_protocol  # type: ignore
 
-    protocol_path = resolve_protocol(str(args.protocol))
+    model_id = args.model_id
+    bundle_id = args.bundle_id
+
+    protocol_ref = args.protocol
+    commands_ref: Optional[str] = args.commands
+
+    if not protocol_ref and model_id:
+        model_path = resolve_model(model_id)
+        model_doc = load_yaml_optional(model_path)
+        if model_doc is None:
+            raise SystemExit("pyyaml not installed (required for --model-id). Install with: pip install pyyaml")
+        bundles = (model_doc or {}).get("protocol_bundles", [])
+        if isinstance(bundles, list) and bundles:
+            chosen = None
+            if bundle_id:
+                chosen = next((b for b in bundles if isinstance(b, dict) and b.get("bundle_id") == bundle_id), None)
+            if chosen is None:
+                chosen = next((b for b in bundles if isinstance(b, dict)), None)
+            if isinstance(chosen, dict):
+                if isinstance(chosen.get("protocol_id"), str):
+                    protocol_ref = chosen["protocol_id"]
+                if commands_ref is None and isinstance(chosen.get("command_set_id"), str):
+                    commands_ref = chosen["command_set_id"]
+                bundle_id = bundle_id or str(chosen.get("bundle_id") or "")
+
+    if not protocol_ref:
+        raise SystemExit("Missing --protocol (or supply --model-id to auto-select protocol bundle)")
+
+    if ("/" in str(protocol_ref) or "\\" in str(protocol_ref)) and not Path(str(protocol_ref)).is_absolute():
+        protocol_path = (dvk_root / str(protocol_ref)).resolve()
+    else:
+        protocol_path = resolve_protocol(str(protocol_ref))
     protocol = load_protocol(protocol_path)
 
     # Get frame spec
@@ -364,10 +393,11 @@ def cmd_decode(args: argparse.Namespace) -> None:
     semantic_applied = False
     semantic_reason = "semantic disabled"
     commands_path: Optional[Path] = None
-    if args.commands:
-        commands_path = Path(args.commands)
-        if not commands_path.is_absolute():
-            commands_path = dvk_root / commands_path
+    if commands_ref:
+        if ("/" in str(commands_ref) or "\\" in str(commands_ref)) and not Path(str(commands_ref)).is_absolute():
+            commands_path = (dvk_root / str(commands_ref)).resolve()
+        else:
+            commands_path = resolve_command_set(str(commands_ref))
         cmd_doc = load_yaml_optional(commands_path)
         if cmd_doc is None:
             semantic_reason = f"commands.yaml not loaded: {commands_path}"
@@ -418,6 +448,8 @@ def cmd_decode(args: argparse.Namespace) -> None:
         "device_id": device_id,
         "run_id": run.run_id,
         "workdir": str(workdir_root),
+        "model_id": model_id,
+        "bundle_id": bundle_id or None,
         "protocol": str(protocol_path),
         "frame_name": frame_spec.get("name"),
         "input": str(frames_path),
@@ -452,7 +484,7 @@ def cmd_decode(args: argparse.Namespace) -> None:
         if mem and effective_run_id:
             mem.observe(
                 run_id=effective_run_id,
-                model_id=os.environ.get("DVK_MODEL_ID", device_id),
+                model_id=os.environ.get("DVK_MODEL_ID", (model_id or device_id)),
                 fw_version=os.environ.get("DVK_FW_VERSION", "unknown"),
                 instance_id=device_id,
                 source="system",
@@ -468,8 +500,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--workdir", help="Workdir root for outputs (default: ~/DVK_Workspaces or env DVK_WORKDIR)")
     p.add_argument("--run-id", help="Run id (default: latest for device, else auto timestamp)")
     p.add_argument("--input", help="Path to frames.bin (default: workdir latest run frames.bin)")
-    p.add_argument("--protocol", required=True, help="Path to protocol.json (e.g., spec/protocols/<protocol_id>/protocol.json)")
-    p.add_argument("--commands", help="Path to commands.yaml (optional; enables semantic decode via telemetry section)")
+    p.add_argument("--model-id", help="Model id (resolves via $DVK_SPEC_ROOT or default workdir _assets/spec/models)")
+    p.add_argument("--bundle-id", help="Protocol bundle id (from model spec) to select protocol/command defaults")
+    p.add_argument("--protocol", help="Protocol id or path to protocol.json (optional if --model-id provided)")
+    p.add_argument("--commands", help="Command set id or path to commands.yaml (optional; enables semantic decode via telemetry section)")
     p.add_argument("--frame-name", help="Frame name to decode (default: first frame)")
     p.add_argument("--auto-frame-by-if", action="store_true", help="Auto-select frame by IF bits (requires protocol.frame_selector)")
     p.add_argument("--format", choices=["csv", "json", "parquet"], default="csv", help="Output format")
