@@ -1,0 +1,24 @@
+{
+  "name": "embedded-marketplace",
+  "owner": {
+    "name": "YOUR_NAME",
+    "email": "YOUR_EMAIL"
+  },
+  "metadata": {
+    "description": "Embedded + device verification plugins for Claude Code",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "dvk",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/lj123as/Device-Verification-Kit.git"
+      },
+      "description": "Device Verification Kit (DVK): protocol → capture → decode → analysis → report",
+      "version": "0.1.0",
+      "strict": true
+    }
+  ]
+}
+

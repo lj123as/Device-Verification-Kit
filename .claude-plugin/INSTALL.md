@@ -2,7 +2,28 @@
 
 ## Quick Installation
 
-DVK is pre-configured as a Claude Code skill library. No additional setup required!
+### Marketplace install (recommended)
+
+Install DVK from your team marketplace:
+
+```text
+/plugin marketplace add lj123as/embedded-marketplace
+/plugin install dvk@embedded-marketplace
+```
+
+Marketplace installs are version-pinned; DVK releases should be tagged as `vX.Y.Z` (e.g., `v0.1.0`).
+
+Maintainers: to host your own marketplace repo, see `docs/marketplace.md`.
+
+### Dev / local checkout
+
+Clone this repo into your normal “code/projects” directory (or download a zip), then open the cloned folder in Claude Code:
+
+```bash
+cd <YOUR_CODE_DIR>
+git clone https://github.com/lj123as/Device-Verification-Kit.git
+cd Device-Verification-Kit
+```
 
 ## Verification
 

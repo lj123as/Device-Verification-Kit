@@ -3,7 +3,8 @@
 ## IMMEDIATELY RUN THIS BOOTSTRAP COMMAND
 
 ```bash
-~/.codex/dvk/.codex/dvk-codex bootstrap
+# Run inside WSL2 / bash (dvk-codex is a bash script)
+bash ~/.codex/dvk/.codex/dvk-codex bootstrap
 ```
 
 After running the bootstrap, **follow the displayed instructions carefully.**
@@ -28,7 +29,7 @@ Add DVK skills to your `~/.codex/AGENTS.md`:
 **IMPORTANT: Before using DVK, run the bootstrap command:**
 
 ```bash
-~/.codex/dvk/.codex/dvk-codex bootstrap
+bash ~/.codex/dvk/.codex/dvk-codex bootstrap
 ```
 
 This will:
@@ -73,7 +74,7 @@ pip install -r skills/analysis_skill/requirements.txt
 Run the bootstrap command to verify installation:
 
 ```bash
-~/.codex/dvk/.codex/dvk-codex bootstrap
+bash ~/.codex/dvk/.codex/dvk-codex bootstrap
 ```
 
 Expected output:

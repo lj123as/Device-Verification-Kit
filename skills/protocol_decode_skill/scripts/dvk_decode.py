@@ -12,6 +12,7 @@ import csv
 import json
 import os
 import struct
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -442,6 +443,23 @@ def cmd_decode(args: argparse.Namespace) -> None:
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print(json.dumps(meta["stats"], ensure_ascii=False))
+
+    try:
+        from dvk.workdir import device_root as dvk_device_root  # type: ignore
+        from dvk.memory_integration import for_device  # type: ignore
+
+        mem = for_device(dvk_root=dvk_root, device_root=dvk_device_root(device_id, workdir_root=workdir_root))
+        if mem and effective_run_id:
+            mem.observe(
+                run_id=effective_run_id,
+                model_id=os.environ.get("DVK_MODEL_ID", device_id),
+                fw_version=os.environ.get("DVK_FW_VERSION", "unknown"),
+                instance_id=device_id,
+                source="system",
+                content=json.dumps({"event": "decode_complete", **meta}, ensure_ascii=False),
+            )
+    except Exception as e:
+        print(f"[embedded-memory] observe failed: {e}", file=sys.stderr)
 
 
 def build_parser() -> argparse.ArgumentParser:

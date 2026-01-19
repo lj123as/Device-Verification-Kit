@@ -4,14 +4,16 @@
 # Architecture & Development Documentation
 # ========================================
 # Exclude internal development artifacts
-docs/
-*_Architecture.md
-task_plan.md
-findings.md
-progress.md
-DEV_*.md
-ARCH.md
+docs/plans/
+docs/designs/
+docs/references/
+/task_plan.md
+/findings.md
+/progress.md
+/DEV_*.md
+/ARCH.md
 **/docs/ARCH.md
+docs/internal/
 
 # ========================================
 # Data & Runtime Artifacts

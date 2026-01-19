@@ -11,8 +11,9 @@ import argparse
 import csv
 import json
 import os
+import sys
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -269,9 +270,22 @@ def cmd_generate(args: argparse.Namespace) -> None:
     dvk_root = find_dvk_root(Path(__file__).parent)
     device_id = args.device_id
 
-    reports_dir = Path(args.out_dir) if args.out_dir else (dvk_root / "reports" / device_id)
-    if not reports_dir.is_absolute():
-        reports_dir = dvk_root / reports_dir
+    sys.path.insert(0, str(dvk_root))
+    from dvk.workdir import default_workdir_root, device_root as dvk_device_root, latest_run_id, run_paths  # type: ignore
+    from dvk.memory_integration import for_device  # type: ignore
+
+    workdir_root = Path(args.workdir).expanduser() if getattr(args, "workdir", None) else default_workdir_root()
+    effective_run_id = getattr(args, "run_id", None) or latest_run_id(device_id, workdir_root=workdir_root)
+    run = run_paths(device_id, run_id=effective_run_id, workdir_root=workdir_root) if effective_run_id else None
+
+    if args.out_dir:
+        reports_dir = Path(args.out_dir)
+        if not reports_dir.is_absolute():
+            reports_dir = dvk_root / reports_dir
+    elif run:
+        reports_dir = run.reports_dir / "report"
+    else:
+        reports_dir = dvk_root / "reports" / device_id
 
     protocol_path_display: Optional[str] = None
     if args.protocol:
@@ -295,10 +309,31 @@ def cmd_generate(args: argparse.Namespace) -> None:
         metadata["Audience"] = args.audience
 
     # Load evidence
-    decode_meta = load_decode_meta(dvk_root, device_id)
-    session_meta = load_session_meta(dvk_root, device_id)
-    csv_summary = load_decoded_csv_summary(dvk_root, device_id, max_rows=args.sample_rows)
-    figures = find_figures(reports_dir)
+    if run:
+        decode_meta_path = run.processed_dir / "decode_meta.json"
+        decode_meta = json.loads(decode_meta_path.read_text(encoding="utf-8")) if decode_meta_path.exists() else None
+        session_meta_path = run.raw_dir / "session.json"
+        session_meta = json.loads(session_meta_path.read_text(encoding="utf-8")) if session_meta_path.exists() else None
+        csv_path = run.processed_dir / "decoded.csv"
+        if csv_path.exists():
+            with csv_path.open("r", encoding="utf-8") as f:
+                reader = csv.reader(f)
+                headers = next(reader, [])
+                rows = []
+                count = 0
+                for row in reader:
+                    count += 1
+                    if len(rows) < args.sample_rows:
+                        rows.append(row)
+            csv_summary = (headers, rows, count)
+        else:
+            csv_summary = ([], [], 0)
+        figures = find_figures(run.reports_dir)
+    else:
+        decode_meta = load_decode_meta(dvk_root, device_id)
+        session_meta = load_session_meta(dvk_root, device_id)
+        csv_summary = load_decoded_csv_summary(dvk_root, device_id, max_rows=args.sample_rows)
+        figures = find_figures(reports_dir)
 
     # Generate markdown
     md_content = generate_markdown_report(
@@ -318,15 +353,18 @@ def cmd_generate(args: argparse.Namespace) -> None:
 
     # Write output
     fmt = args.format.lower()
+    generated_paths: List[Path] = []
     if fmt == "md":
         out_path = reports_dir / "report.md"
         out_path.write_text(md_content, encoding="utf-8")
         print(f"Report generated: {out_path}")
+        generated_paths.append(out_path)
     elif fmt == "html":
         html_content = generate_html_report(md_content, device_id)
         out_path = reports_dir / "report.html"
         out_path.write_text(html_content, encoding="utf-8")
         print(f"Report generated: {out_path}")
+        generated_paths.append(out_path)
     elif fmt == "both":
         md_path = reports_dir / "report.md"
         md_path.write_text(md_content, encoding="utf-8")
@@ -334,13 +372,68 @@ def cmd_generate(args: argparse.Namespace) -> None:
         html_path = reports_dir / "report.html"
         html_path.write_text(html_content, encoding="utf-8")
         print(f"Reports generated: {md_path}, {html_path}")
+        generated_paths.extend([md_path, html_path])
     else:
         raise SystemExit(f"Unsupported format: {fmt}")
+
+    mem = for_device(dvk_root=dvk_root, device_root=dvk_device_root(device_id, workdir_root=workdir_root))
+    if mem and run:
+        payload = {
+            "event": "report_generated",
+            "device_id": device_id,
+            "run_id": run.run_id,
+            "model": args.model,
+            "fw_version": args.fw_version,
+            "report_dir": str(reports_dir),
+            "reports": [str(p) for p in generated_paths],
+            "figures_found": len(figures),
+            "decode_stats": (decode_meta or {}).get("stats") if isinstance(decode_meta, dict) else None,
+            "session_stats": (session_meta or {}).get("stats") if isinstance(session_meta, dict) else None,
+        }
+        try:
+            mem.observe(
+                run_id=run.run_id,
+                model_id=args.model or device_id,
+                fw_version=args.fw_version or "unknown",
+                instance_id=device_id,
+                source="report",
+                content=json.dumps(payload, ensure_ascii=False),
+            )
+            compile_request_path = mem.store_root / "runs" / run.run_id / "compile_request.json"
+            mem.compile_prepare(run_id=run.run_id, out_path=compile_request_path, limit=200)
+            print(f"[embedded-memory] compile_request: {compile_request_path}")
+
+            req = json.loads(compile_request_path.read_text(encoding="utf-8"))
+            template = {
+                "schema_version": "0.1",
+                "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
+                "request_id": req.get("request_id"),
+                "policy_echo": req.get("policy", {}),
+                "provenance_summary": {"observation_ids_used": req.get("observation_ids", [])},
+                "profiles_to_upsert": [],
+                "candidates_to_create": [],
+                "overrides_to_upsert": [],
+                "errors": [],
+            }
+            compile_response_template_path = mem.store_root / "runs" / run.run_id / "compile_response.template.json"
+            compile_response_template_path.write_text(
+                json.dumps(template, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            print(f"[embedded-memory] compile_response template: {compile_response_template_path}")
+            print(
+                "[embedded-memory] next: fill compile_response.json (STRICT JSON) and run "
+                f"`python tools/dvk_memory.py apply --device-id {device_id} --run-id {run.run_id} --workdir {workdir_root}`"
+            )
+        except Exception as e:
+            print(f"[embedded-memory] hook failed: {e}", file=sys.stderr)
 
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="dvk_report.py", description="Generate DVK verification reports")
     p.add_argument("--device-id", required=True, help="Device ID")
+    p.add_argument("--workdir", help="Workdir root (default: ~/DVK_Workspaces or env DVK_WORKDIR)")
+    p.add_argument("--run-id", help="Run id (default: latest for device)")
     p.add_argument("--format", choices=["md", "html", "both"], default="md", help="Output format")
     p.add_argument("--protocol", help="Path to protocol.json used for decoding (optional but recommended)")
     p.add_argument(

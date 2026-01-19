@@ -1,0 +1,3 @@
+[submodule "tools/embedded-memory"]
+	path = tools/embedded-memory
+	url = https://github.com/lj123as/embedded-memory.git

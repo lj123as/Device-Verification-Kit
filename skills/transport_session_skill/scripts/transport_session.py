@@ -305,6 +305,24 @@ def cmd_align(args: argparse.Namespace) -> None:
 
     (raw_dir / "session.json").write_text(json.dumps(session, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(session["stats"], ensure_ascii=False))
+
+    try:
+        from dvk.workdir import device_root as dvk_device_root  # type: ignore
+        from dvk.memory_integration import for_device  # type: ignore
+
+        mem = for_device(dvk_root=dvk_root, device_root=dvk_device_root(device_id, workdir_root=workdir_root))
+        if mem:
+            mem.observe(
+                run_id=run.run_id,
+                model_id=os.environ.get("DVK_MODEL_ID", device_id),
+                fw_version=os.environ.get("DVK_FW_VERSION", "unknown"),
+                instance_id=device_id,
+                source="system",
+                content=json.dumps({"event": "session_aligned", **session}, ensure_ascii=False),
+            )
+    except Exception as e:
+        print(f"[embedded-memory] observe failed: {e}", file=sys.stderr)
+
 def cmd_capture_uart(args: argparse.Namespace) -> None:
     try:
         import serial  # type: ignore
@@ -331,6 +349,35 @@ def cmd_capture_uart(args: argparse.Namespace) -> None:
                 fout.write(data)
 
     print("Capture complete.")
+
+    try:
+        sys.path.insert(0, str(dvk_root))
+        from dvk.workdir import device_root as dvk_device_root  # type: ignore
+        from dvk.memory_integration import for_device  # type: ignore
+
+        mem = for_device(dvk_root=dvk_root, device_root=dvk_device_root(args.device_id, workdir_root=workdir_root))
+        if mem:
+            mem.observe(
+                run_id=run.run_id,
+                model_id=os.environ.get("DVK_MODEL_ID", args.device_id),
+                fw_version=os.environ.get("DVK_FW_VERSION", "unknown"),
+                instance_id=args.device_id,
+                source="system",
+                content=json.dumps(
+                    {
+                        "event": "transport_capture_uart",
+                        "device_id": args.device_id,
+                        "run_id": run.run_id,
+                        "port": port,
+                        "baudrate": baudrate,
+                        "duration_s": duration_s,
+                        "output_stream": str(out_stream_path),
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+    except Exception as e:
+        print(f"[embedded-memory] observe failed: {e}", file=sys.stderr)
 
 
 def _capture_socket_stream(
@@ -390,6 +437,38 @@ def cmd_capture_tcp(args: argparse.Namespace) -> None:
             pass
     print(f"Capture complete. bytes={total}, chunks={chunks}")
 
+    try:
+        sys.path.insert(0, str(dvk_root))
+        from dvk.workdir import device_root as dvk_device_root  # type: ignore
+        from dvk.memory_integration import for_device  # type: ignore
+
+        mem = for_device(dvk_root=dvk_root, device_root=dvk_device_root(args.device_id, workdir_root=workdir_root))
+        if mem:
+            mem.observe(
+                run_id=run.run_id,
+                model_id=os.environ.get("DVK_MODEL_ID", args.device_id),
+                fw_version=os.environ.get("DVK_FW_VERSION", "unknown"),
+                instance_id=args.device_id,
+                source="system",
+                content=json.dumps(
+                    {
+                        "event": "transport_capture_tcp",
+                        "device_id": args.device_id,
+                        "run_id": run.run_id,
+                        "host": host,
+                        "port": port,
+                        "duration_s": duration_s,
+                        "timeout_s": timeout_s,
+                        "max_bytes": max_bytes,
+                        "output_stream": str(out_stream_path),
+                        "stats": {"total_bytes": total, "chunks": chunks},
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+    except Exception as e:
+        print(f"[embedded-memory] observe failed: {e}", file=sys.stderr)
+
 
 def cmd_capture_udp(args: argparse.Namespace) -> None:
     dvk_root = find_dvk_root(Path(__file__).parent)
@@ -441,6 +520,40 @@ def cmd_capture_udp(args: argparse.Namespace) -> None:
             sock.close()
         except Exception:
             pass
+
+    try:
+        sys.path.insert(0, str(dvk_root))
+        from dvk.workdir import device_root as dvk_device_root  # type: ignore
+        from dvk.memory_integration import for_device  # type: ignore
+
+        mem = for_device(dvk_root=dvk_root, device_root=dvk_device_root(args.device_id, workdir_root=workdir_root))
+        if mem:
+            mem.observe(
+                run_id=run.run_id,
+                model_id=os.environ.get("DVK_MODEL_ID", args.device_id),
+                fw_version=os.environ.get("DVK_FW_VERSION", "unknown"),
+                instance_id=args.device_id,
+                source="system",
+                content=json.dumps(
+                    {
+                        "event": "transport_capture_udp",
+                        "device_id": args.device_id,
+                        "run_id": run.run_id,
+                        "bind_host": bind_host,
+                        "bind_port": bind_port,
+                        "duration_s": duration_s,
+                        "timeout_s": timeout_s,
+                        "max_bytes": max_bytes,
+                        "source_host": source_host,
+                        "source_port": source_port,
+                        "output_stream": str(out_stream_path),
+                        "stats": {"total_bytes": total_bytes, "datagrams": datagrams},
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+    except Exception as e:
+        print(f"[embedded-memory] observe failed: {e}", file=sys.stderr)
 
 
 def build_parser() -> argparse.ArgumentParser:

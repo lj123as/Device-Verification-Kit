@@ -16,6 +16,12 @@ Link DVK's OpenCode plugin file to OpenCode's plugin directory:
 ln -s ~/.config/opencode/dvk/.opencode/plugin.json ~/.config/opencode/plugins/dvk.json
 ```
 
+If symlinks are not available, copy the file instead:
+
+```bash
+cp ~/.config/opencode/dvk/.opencode/plugin.json ~/.config/opencode/plugins/dvk.json
+```
+
 ### 3. Restart OpenCode
 
 Reload OpenCode to activate the DVK plugin.

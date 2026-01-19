@@ -290,7 +290,8 @@ def cmd_init(args: argparse.Namespace) -> None:
 
     # Private workdir (default): %USERPROFILE%/DVK_Workspaces
     sys.path.insert(0, str(dvk_root))
-    from dvk.workdir import default_workdir_root, latest_run_id, run_paths  # type: ignore
+    from dvk.workdir import default_workdir_root, device_root as dvk_device_root, latest_run_id, run_paths  # type: ignore
+    from dvk.memory_integration import for_device  # type: ignore
 
     workdir_root = Path(args.workdir).expanduser() if getattr(args, "workdir", None) else default_workdir_root()
     effective_run_id = getattr(args, "run_id", None) or latest_run_id(device_id, workdir_root=workdir_root)
@@ -318,7 +319,27 @@ def cmd_init(args: argparse.Namespace) -> None:
     notebooks_dir.mkdir(parents=True, exist_ok=True)
     figures_dir.mkdir(parents=True, exist_ok=True)
 
+    allowed_templates = {"eda", "cleaning", "metrics", "anomaly", "viz", "full"}
     template = args.template
+    model_id = os.environ.get("DVK_MODEL_ID", device_id)
+    fw_version = os.environ.get("DVK_FW_VERSION", "unknown")
+
+    if template is None:
+        mem = for_device(dvk_root=dvk_root, device_root=dvk_device_root(device_id, workdir_root=workdir_root))
+        if mem and fw_version != "unknown":
+            try:
+                resolved = mem.resolve(model_id=model_id, fw_version=fw_version, instance_id=device_id)
+                facts = (resolved.get("effective_profile") or {}).get("facts") or {}
+                defaults = (facts.get("analysis") or {}).get("default_templates")
+                if isinstance(defaults, list):
+                    for cand in defaults:
+                        if isinstance(cand, str) and cand in allowed_templates:
+                            template = cand
+                            break
+            except Exception as e:
+                print(f"[embedded-memory] resolve failed: {e}", file=sys.stderr)
+        if template is None:
+            template = "eda"
     nb_name_map = {
         "eda": "eda.ipynb",
         "cleaning": "cleaning.ipynb",
@@ -347,6 +368,29 @@ def cmd_init(args: argparse.Namespace) -> None:
             summary,
             f"# DVK Analysis Summary\n\n- device_id: `{device_id}`\n- created_at: `{datetime.now().isoformat(timespec='seconds')}`\n- input: `{decoded}`\n\n## Findings\n\n- \n",
         )
+
+    mem = for_device(dvk_root=dvk_root, device_root=dvk_device_root(device_id, workdir_root=workdir_root))
+    if mem:
+        payload = {
+            "event": "analysis_init",
+            "device_id": device_id,
+            "run_id": run.run_id,
+            "template": template,
+            "decoded_input": str(decoded),
+            "notebook": str(nb_path),
+            "summary": str(summary),
+        }
+        try:
+            mem.observe(
+                run_id=run.run_id,
+                model_id=model_id,
+                fw_version=fw_version,
+                instance_id=device_id,
+                source="analysis",
+                content=json.dumps(payload, ensure_ascii=False),
+            )
+        except Exception as e:
+            print(f"[embedded-memory] observe failed: {e}", file=sys.stderr)
 
     print(str(nb_path))
 
@@ -397,8 +441,8 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument(
         "--template",
         choices=["eda", "cleaning", "metrics", "anomaly", "viz", "full"],
-        default="eda",
-        help="Notebook template to generate",
+        default=None,
+        help="Notebook template to generate (default: from embedded-memory, else eda)",
     )
     init.set_defaults(func=cmd_init)
 

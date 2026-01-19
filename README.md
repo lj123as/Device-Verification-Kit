@@ -26,12 +26,26 @@ Built as an AI-native skill library with executable Python scripts. Works with C
 
 ### For Claude Code
 
-**Recommended** - DVK is pre-configured as a Claude Code skill library:
+**Recommended (Marketplace)** - Install DVK from marketplace:
+
+```text
+/plugin marketplace add lj123as/embedded-marketplace
+/plugin install dvk@embedded-marketplace
+```
+
+Marketplace installs are version-pinned; DVK releases should be tagged as `vX.Y.Z` (e.g., `v0.1.0`).
+
+Maintainers: to host your own marketplace repo, see `docs/marketplace.md`.
+
+**Dev / Local Checkout** - Clone this repo, then open the cloned folder in Claude Code:
 
 ```bash
+cd <YOUR_CODE_DIR>
 git clone https://github.com/lj123as/Device-Verification-Kit.git
 cd Device-Verification-Kit
 ```
+
+Example clone locations: `~/dev/Device-Verification-Kit`, `C:\dev\Device-Verification-Kit`.
 
 Then in Claude Code:
 ```
@@ -40,11 +54,25 @@ Use using_dvk skill to get started
 
 **Detailed setup**: [.claude-plugin/INSTALL.md](.claude-plugin/INSTALL.md)
 
+### Optional: Embedded Memory plugin
+
+DVK can optionally use the **embedded-memory** plugin for auditable, project-local knowledge capture (observations → rules → query/resolve).
+
+- Repo: `https://github.com/lj123as/embedded-memory.git`
+- Suggested integration: add as a git submodule at `tools/embedded-memory`
+- Enable hooks: set `DVK_EMBEDDED_MEMORY=1`
+- Optional subject hints: set `DVK_MODEL_ID` and `DVK_FW_VERSION` (otherwise defaults to `device_id` / `unknown`)
+- When enabled, DVK emits `runs/<run_id>/observations.jsonl` during capture/decode/analysis/report and writes `runs/<run_id>/compile_request.json` after report generation.
+
 ### For Codex
+
+Fetch and follow instructions from:
+`https://raw.githubusercontent.com/lj123as/Device-Verification-Kit/main/.codex/INSTALL.md`
 
 ```bash
 git clone https://github.com/lj123as/Device-Verification-Kit.git ~/.codex/dvk
-~/.codex/dvk/.codex/dvk-codex bootstrap
+# Run inside WSL2 / bash (dvk-codex is a bash script)
+bash ~/.codex/dvk/.codex/dvk-codex bootstrap
 ```
 
 Follow the bootstrap instructions to complete setup.
@@ -52,6 +80,9 @@ Follow the bootstrap instructions to complete setup.
 **Detailed setup**: [.codex/INSTALL.md](.codex/INSTALL.md)
 
 ### For OpenCode
+
+Fetch and follow instructions from:
+`https://raw.githubusercontent.com/lj123as/Device-Verification-Kit/main/.opencode/INSTALL.md`
 
 ```bash
 git clone https://github.com/lj123as/Device-Verification-Kit.git ~/.config/opencode/dvk
