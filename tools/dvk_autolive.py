@@ -231,14 +231,17 @@ def main() -> int:
     dvk_root = find_dvk_root(Path(__file__).parent)
 
     ap = argparse.ArgumentParser()
+    ap.add_argument("--python", help="Python executable to use (default: current interpreter)")
     ap.add_argument("--device-id", required=True)
+    ap.add_argument("--model-id", help="Model id (enables auto protocol/baudrate/commands defaults)")
+    ap.add_argument("--bundle-id", help="Protocol bundle id (from model spec) to select protocol/command defaults")
     ap.add_argument("--workdir", help="Workdir root (default: ~/DVK_Workspaces or env DVK_WORKDIR)")
     ap.add_argument("--notebook", default="live/notebooks/live.ipynb", help="Notebook path (relative to device workdir)")
     ap.add_argument("--start-publisher", action="store_true", help="Start a SharedMemory publisher (UART -> decode -> SHM)")
     ap.add_argument("--port", help="UART port like COM22 (required with --start-publisher)")
-    ap.add_argument("--baudrate", type=int, default=230400, help="UART baudrate (used with --start-publisher)")
-    ap.add_argument("--protocol", help="protocol.json path (required with --start-publisher)")
-    ap.add_argument("--commands", help="commands.yaml path (optional; used with --start-publisher)")
+    ap.add_argument("--baudrate", type=int, help="UART baudrate (default: from model spec, else 230400)")
+    ap.add_argument("--protocol", help="Protocol id or protocol.json path (required unless --model-id provided)")
+    ap.add_argument("--commands", help="Command set id or commands.yaml path (optional; defaults from model bundle if available)")
     ap.add_argument(
         "--spec-root",
         help="Private spec root (defaults to env DVK_SPEC_ROOT or $DVK_WORKDIR/Device-Verification-Kit/_assets/spec).",
@@ -253,7 +256,10 @@ def main() -> int:
     ap.add_argument("--no-open", action="store_true", help="Do not open browser (start services only)")
     ap.add_argument("--verbose", action="store_true")
     ap.add_argument("--log-dir", help="Directory for logs (default: <workdir>/_logs)")
+    ap.add_argument("--doctor", action="store_true", help="Run environment checks before starting services")
     args = ap.parse_args()
+
+    py = args.python or sys.executable
 
     sys.path.insert(0, str(dvk_root))
     from dvk.workdir import default_workdir_root, device_root, project_workdir_root  # type: ignore
@@ -264,6 +270,14 @@ def main() -> int:
     spec_root = Path(args.spec_root).expanduser().resolve() if args.spec_root else None
     log_dir = Path(args.log_dir).expanduser() if args.log_dir else (proj_root / "_logs")
     ts = time.strftime("%Y%m%d-%H%M%S")
+
+    if args.doctor:
+        doctor_cmd = [py, str(dvk_root / "tools" / "dvk_doctor.py"), "--device-id", str(args.device_id), "--mode", "live"]
+        if args.model_id:
+            doctor_cmd += ["--model-id", str(args.model_id)]
+        if args.port:
+            doctor_cmd += ["--port", str(args.port)]
+        subprocess.run(doctor_cmd, cwd=str(dvk_root))
 
     default_nb = "live/notebooks/live.ipynb"
     if args.notebook == default_nb:
@@ -279,7 +293,7 @@ def main() -> int:
     if not nb_path.exists():
         # Create live notebook template automatically (owned by live_analysis_skill).
         init_cmd = [
-            sys.executable,
+            py,
             str(dvk_root / "skills" / "live_analysis_skill" / "scripts" / "dvk_live_analysis.py"),
             "init",
             "--device-id",
@@ -297,19 +311,57 @@ def main() -> int:
     if args.start_publisher:
         if not args.port:
             raise SystemExit("Missing --port (required with --start-publisher)")
-        if not args.protocol:
-            raise SystemExit("Missing --protocol (required with --start-publisher)")
 
-        # Resolve protocol/commands from either explicit paths or ids.
-        from dvk.assets import resolve_command_set, resolve_protocol  # type: ignore
+        # Resolve protocol/commands from either explicit paths or ids (or auto from model spec).
+        from dvk.assets import resolve_command_set, resolve_model, resolve_protocol  # type: ignore
 
-        protocol_path = resolve_protocol(str(args.protocol), spec_root=spec_root)
+        model_id = args.model_id
+        bundle_id = args.bundle_id
+
+        protocol_ref = args.protocol
+        commands_ref = args.commands
+
+        if not protocol_ref and model_id:
+            try:
+                import yaml  # type: ignore
+            except Exception as e:
+                raise SystemExit(f"pyyaml not installed (required for --model-id). Install with: pip install pyyaml\nError: {e}")
+            model_path = resolve_model(str(model_id), spec_root=spec_root)
+            model_doc = yaml.safe_load(model_path.read_text(encoding="utf-8")) or {}
+
+            bundles = model_doc.get("protocol_bundles", [])
+            chosen = None
+            if isinstance(bundles, list) and bundles:
+                if bundle_id:
+                    chosen = next((b for b in bundles if isinstance(b, dict) and b.get("bundle_id") == bundle_id), None)
+                if chosen is None:
+                    chosen = next((b for b in bundles if isinstance(b, dict)), None)
+            if isinstance(chosen, dict):
+                if not protocol_ref:
+                    protocol_ref = chosen.get("protocol_id")
+                if commands_ref is None:
+                    commands_ref = chosen.get("command_set_id")
+
+            if args.baudrate is None:
+                transports = model_doc.get("default_transports", [])
+                uart = None
+                if isinstance(transports, list):
+                    uart = next((t for t in transports if isinstance(t, dict) and str(t.get("type")).upper() == "UART"), None)
+                if isinstance(uart, dict) and uart.get("baudrate"):
+                    args.baudrate = int(uart["baudrate"])
+
+        if not protocol_ref:
+            raise SystemExit("Missing --protocol (or supply --model-id to auto-select protocol bundle)")
+
+        protocol_path = resolve_protocol(str(protocol_ref), spec_root=spec_root)
         commands_path: Optional[Path] = None
-        if args.commands:
-            commands_path = resolve_command_set(str(args.commands), spec_root=spec_root)
+        if commands_ref:
+            commands_path = resolve_command_set(str(commands_ref), spec_root=spec_root)
+
+        baudrate = int(args.baudrate) if args.baudrate is not None else 230400
 
         publisher_cmd = [
-            sys.executable,
+            py,
             str(dvk_root / "skills" / "transport_session_skill" / "scripts" / "dvk_live.py"),
             "uart-publish",
             "--device-id",
@@ -317,7 +369,7 @@ def main() -> int:
             "--port",
             str(args.port),
             "--baudrate",
-            str(args.baudrate),
+            str(baudrate),
             "--protocol",
             str(protocol_path),
             "--overwrite-shm",
@@ -351,7 +403,7 @@ def main() -> int:
         ui_cmd = "lab"
 
     # Reuse an existing server for this workdir if available (avoids token/login confusion).
-    existing = pick_jupyter_url_for_dir(python=sys.executable, cwd=proj_root, expected_dir=proj_root)
+    existing = pick_jupyter_url_for_dir(python=py, cwd=proj_root, expected_dir=proj_root)
     if existing:
         server_base, token = _split_server_url_and_token(existing)
         base_url = server_base + (f"/?token={token}" if token else "")
@@ -360,7 +412,7 @@ def main() -> int:
     else:
         chosen_port = _pick_free_port(int(args.jupyter_port))
         lab_cmd = [
-            sys.executable,
+            py,
             "-m",
             "jupyter",
             ui_cmd,
@@ -381,7 +433,7 @@ def main() -> int:
         jupyter_proc = run_detached(lab_cmd, cwd=proj_root, env=env, stdout_path=jup_log, stderr_path=jup_log)
 
         # Discover the actual token URL for the Jupyter process we started
-        runtime_dir = _jupyter_runtime_dir(python=sys.executable, cwd=proj_root)
+        runtime_dir = _jupyter_runtime_dir(python=py, cwd=proj_root)
         info: Optional[dict] = None
         t0 = time.time()
         while time.time() - t0 < 30.0:
@@ -396,7 +448,7 @@ def main() -> int:
             base_url = f"{server_url}/?token={server_token}" if server_token else server_url
         else:
             # Fallback: sometimes the runtime json is delayed; try discovering by root-dir.
-            fallback = pick_jupyter_url_for_dir(python=sys.executable, cwd=proj_root, expected_dir=proj_root)
+            fallback = pick_jupyter_url_for_dir(python=py, cwd=proj_root, expected_dir=proj_root)
             if not fallback:
                 raise SystemExit("Failed to start a Jupyter server for the DVK workdir.")
             server_url, server_token = _split_server_url_and_token(fallback)
@@ -414,11 +466,14 @@ def main() -> int:
         open_browser(url)
 
     print("OK")
+    print(f"- python: {py}")
     print(f"- workdir: {proj_root}")
     print(f"- shared_memory: dvk.{args.device_id}")
     print(f"- logs: {log_dir}")
     print(f"- jupyter: {base_url}")
     print(f"- notebook: {url}")
+    if args.no_open:
+        print("- note: --no-open was set; open the notebook URL manually.")
     if ui_cmd != "nbclassic":
         print("- note: MCP notebook automation requires nbclassic (install: pip install nbclassic)")
     return 0

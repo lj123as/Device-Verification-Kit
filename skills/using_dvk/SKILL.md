@@ -1,6 +1,6 @@
 ---
 name: using_dvk
-description: DVK entrypoint skill. This skill orchestrates the end-to-end pipeline (protocol → capture → decode/encode → analysis → report). Use when starting any DVK verification workflow. Requires device serial, protocol selection, transport parameters, and verification goals; request missing inputs before proceeding.
+description: DVK entrypoint skill. This skill orchestrates the end-to-end pipeline (protocol → capture → decode/encode → analysis → report). Use when starting any DVK verification workflow.
 ---
 
 # using_dvk (DVK Entry)
@@ -9,67 +9,62 @@ description: DVK entrypoint skill. This skill orchestrates the end-to-end pipeli
 `using_dvk` is the single entrypoint for DVK. It validates inputs and orchestrates the end-to-end pipeline:
 Protocol assets → Capture & framing → Decode/Encode → Analysis → Report.
 
-## Required Inputs (ask if missing)
+## Reality check (important)
+DVK is designed to be **low-touch** for real device testing:
+- Default private workspace: `%USERPROFILE%\\DVK_Workspaces\\Device-Verification-Kit\\`
+- Default private spec root: `%USERPROFILE%\\DVK_Workspaces\\Device-Verification-Kit\\_assets\\spec\\`
+- When `model_id` is known and maps to a single protocol bundle, DVK should not ask you to manually locate protocol/commands files.
+
+If you see many manual steps, treat it as a bug in the entry workflow: run `dvk_doctor.py` and fix the entrypoints.
+
+## Environment checks (must do before real device tests)
+Run the doctor once per machine/venv (no installs performed):
+
+| Goal | Command |
+|---|---|
+| Offline pipeline readiness | `python tools/dvk_doctor.py --device-id <device_serial> --model-id <model_id> --port COM22 --mode offline` |
+| Live + notebook readiness | `python tools/dvk_doctor.py --device-id <device_serial> --model-id <model_id> --port COM22 --mode live` |
+| Live + MCP automation readiness | `python tools/dvk_doctor.py --device-id <device_serial> --model-id <model_id> --port COM22 --mode live-mcp` |
+
+Notes:
+- If you want to use a project venv, activate it first; the `python` you run decides everything.
+- `nbclassic` is only required for notebook MCP automation; real-time viewing works in JupyterLab.
+
+## Inputs (ask if missing)
 | Item | Required | Notes |
 |------|----------|-------|
 | `device_serial` | Yes | Physical unit ID for this run (also used for folder names) |
-| Bundle selection | Yes | `{protocol_id + command_set_id}` (and recorded versions), or explicit file paths |
-| Protocol assets | Yes | `protocol.json` and (optional) `commands.yaml` |
+| `model_id` | Preferred | Enables default baudrate + protocol bundle selection from model spec |
+| Protocol bundle | Preferred | `{protocol_id + command_set_id}` recorded versions; auto-select if model maps to 1 bundle |
 | Data source | Yes | Live device (UART/Network) or existing raw stream/frames file |
-| Desired outputs | Yes | Decode only / Analysis / Report |
-
-## Multi-device runs
-| Concept | What it means | Required |
-|--------|----------------|----------|
-| Device model (`model_id`) | Product model identifier (may map to multiple protocols) | Optional |
-| Device instance (`device_serial`) | Physical unit serial/ID for this test run | Yes (for multi-device) |
-| Protocol selection | Default is manual; auto-detect only when a model maps to multiple protocols | Yes |
+| Desired outputs | Yes | Decode only / Analysis / Report / Live |
 
 ## Protocol selection policy
 | Situation | What to do |
 |----------|------------|
-| New model onboarding | Require transport info + explicit {protocol + commands} bundle; then write/extend `spec/models/<model_id>.yaml` (`protocol_bundles`) |
+| New model onboarding | Require explicit {protocol + commands} bundle; then write/extend model spec under private spec root |
 | `model_id` maps to 1 protocol | Select directly (no detection) |
-| `model_id` maps to N>1 protocols | Run `protocol_detection_skill` to propose candidates, then confirm with the user |
+| `model_id` maps to N>1 protocols | Run `protocol_detection_skill` to propose candidates, then confirm once |
 
-## Protocol auto-detection (only for multi-protocol models)
-| Method | Description | Typical inputs |
-|--------|-------------|----------------|
-| A: Query | Send a version/info command and parse response | commands + response schema |
-| B: Banner | Parse startup banner text | regex + read window |
-| C: Sniff | Passive framing signature detection | header/msg_id/length/checksum |
+## One-command live testing (recommended)
+Real-time validation (UART → decode → SharedMemory → live notebook):
 
-## Detection tool (UART-first)
-| Task | Command |
-|------|---------|
-| Auto-detect protocol | `python skills/protocol_detection_skill/scripts/dvk_detect_protocol.py uart --device-serial SN-001 --model-id <model_id> --port COM5 --baudrate 115200` |
+`python tools/dvk_autolive.py --doctor --device-id <device_serial> --model-id <model_id> --start-publisher --port COM22 --ui lab`
 
-## Outputs (on disk)
-| Output | Path |
-|--------|------|
-| Protocol assets | `spec/protocols/{protocol_id}/` and `spec/command_sets/{command_set_id}/` |
-| Raw capture & frames | `data/raw/{device_serial}/` |
-| Decoded/structured data | `data/processed/{device_serial}/` |
-| Reports | `reports/{run_id}/` (recommended) or `reports/{device_serial}/` |
-| Temporary scratch (optional) | `data/tmp/{device_serial}/` |
+Notes:
+- Auto-selects protocol/commands/baudrate from the model spec when possible.
+- Use `--python <path>` if you need to force a specific interpreter/venv.
 
-## Run records (recommended)
-| Artifact | Path |
-|----------|------|
-| Run template | `runs/run_template.yaml` |
-| Model registry | `spec/models/<model_id>.yaml` |
-| Detection rules | `spec/detection/rules.yaml` |
-
-## Workflow (must follow)
-1. Confirm `device_serial` and (optional) `model_id`
-2. If protocol assets are missing: request protocol docs and run `protocol_spec_skill`
-3. If raw data is missing: request transport type/params and run `transport_session_skill`
-4. Run `protocol_decode_skill` to produce `data/processed/`
-5. (Optional) Run `analysis_skill`
-6. (Optional) Run `report_skill`
+## Offline workflow (must follow)
+1. Run `dvk_doctor.py` once (environment + paths)
+2. Capture/framing via `transport_session_skill`
+3. Decode via `protocol_decode_skill`
+4. (Optional) Run `analysis_skill`
+5. (Optional) Run `report_skill`
 
 ## Rules
 | Rule | Why |
 |------|-----|
-| Ask instead of guessing | Offsets/length/checksum/endianness must be correct |
 | Schema-driven only | Do not hardcode protocol parsing rules |
+| Ask instead of guessing | Offsets/length/checksum/endianness must be correct |
+
