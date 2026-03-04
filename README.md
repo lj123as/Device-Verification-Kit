@@ -59,8 +59,12 @@ Use using_dvk skill to get started
 DVK can optionally use the **embedded-memory** plugin for auditable, project-local knowledge capture (observations → rules → query/resolve).
 
 - Repo: `https://github.com/lj123as/embedded-memory.git`
-- Suggested integration: add as a git submodule at `tools/embedded-memory`
+- Preferred install: install `embedded-memory` into your active Python environment (pip)
+- Fallback install: add as a git submodule at `tools/embedded-memory`
 - Enable hooks: set `DVK_EMBEDDED_MEMORY=1`
+- Store location (DVK default): repo root containing the DVK device workdir (if any), else the DVK device workdir
+  - Override: `DVK_EMBEDDED_MEMORY_STORE=/path/to/store`
+  - Mode: `DVK_EMBEDDED_MEMORY_STORE_MODE=repo|workdir` (default: `repo`)
 - Optional subject hints: set `DVK_MODEL_ID` and `DVK_FW_VERSION` (otherwise defaults to `device_id` / `unknown`)
 - When enabled, DVK emits `runs/<run_id>/observations.jsonl` during capture/decode/analysis/report and writes `runs/<run_id>/compile_request.json` after report generation.
 
@@ -402,7 +406,7 @@ python skills/analysis_skill/scripts/dvk_analysis.py check-env
 
 ## Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions are welcome! Please see [CONTRIBUTING.md](action/Product-development/development/Device-Verification-Kit/CONTRIBUTING.md) for guidelines.
 
 ---
 
@@ -461,7 +465,7 @@ All 13 skills are documented in their respective `SKILL.md` files:
 
 ## How to Contribute
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
+Contributions are welcome! Please see [CONTRIBUTING.md](action/Product-development/development/Device-Verification-Kit/CONTRIBUTING.md) for guidelines on:
 
 - Skill development standards
 - Protocol asset schemas

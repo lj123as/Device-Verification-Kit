@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import os
 import sys
 from dataclasses import dataclass
@@ -19,6 +20,37 @@ def enabled() -> bool:
 def _embedded_memory_src(dvk_root: Path) -> Path:
     return dvk_root / "tools" / "embedded-memory" / "src"
 
+def _find_git_root(start: Path) -> Optional[Path]:
+    cur = start.resolve()
+    for parent in [cur, *cur.parents]:
+        git_path = parent / ".git"
+        if git_path.is_dir() or git_path.is_file():
+            return parent
+    return None
+
+
+def _store_mode() -> str:
+    return os.environ.get("DVK_EMBEDDED_MEMORY_STORE_MODE", "repo").strip().lower()
+
+
+def _store_root(*, device_root: Path) -> Path:
+    override = os.environ.get("DVK_EMBEDDED_MEMORY_STORE", "").strip()
+    if override:
+        return Path(override).expanduser().resolve()
+
+    mode = _store_mode()
+    if mode == "workdir":
+        return device_root.resolve()
+
+    # Default: repo mode (prefer the git root containing the device_root)
+    return (_find_git_root(device_root) or device_root).resolve()
+
+
+def available(*, dvk_root: Path) -> bool:
+    if importlib.util.find_spec("embedded_memory") is not None:
+        return True
+    return _embedded_memory_src(dvk_root).exists()
+
 
 @dataclass(frozen=True)
 class EmbeddedMemory:
@@ -26,10 +58,22 @@ class EmbeddedMemory:
     store_root: Path
 
     def _import_store(self):
+        # Prefer pip-installed package, fallback to local submodule src.
+        try:
+            from embedded_memory.store import MemoryStore  # type: ignore
+
+            return MemoryStore
+        except (ModuleNotFoundError, ImportError):
+            pass
+
         src = _embedded_memory_src(self.dvk_root)
         if not src.exists():
-            raise FileNotFoundError(f"embedded-memory not found at {src}")
-        sys.path.insert(0, str(src))
+            raise FileNotFoundError(
+                "embedded-memory not available (install the package, or init submodule at tools/embedded-memory)"
+            )
+        src_s = str(src)
+        if src_s not in sys.path:
+            sys.path.insert(0, src_s)
         from embedded_memory.store import MemoryStore  # type: ignore
 
         return MemoryStore
@@ -78,7 +122,6 @@ def for_device(
 ) -> Optional[EmbeddedMemory]:
     if not enabled():
         return None
-    src = _embedded_memory_src(dvk_root)
-    if not src.exists():
+    if not available(dvk_root=dvk_root):
         return None
-    return EmbeddedMemory(dvk_root=dvk_root, store_root=device_root)
+    return EmbeddedMemory(dvk_root=dvk_root, store_root=_store_root(device_root=device_root))

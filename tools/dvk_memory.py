@@ -70,7 +70,9 @@ def cmd_apply(args: argparse.Namespace) -> None:
 
     mem = for_device(dvk_root=dvk_root, device_root=device_root)
     if not mem:
-        raise SystemExit("embedded-memory integration not available (missing submodule or DVK_EMBEDDED_MEMORY not enabled)")
+        raise SystemExit(
+            "embedded-memory integration not available (set DVK_EMBEDDED_MEMORY=1 and install embedded-memory, or init submodule)"
+        )
 
     mem.compile_apply(input_path=response_path, request_path=request_path)
     print("Applied:", response_path)
